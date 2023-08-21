@@ -42,9 +42,8 @@ export const StoreModal = () => {
       //error loading is true
       setLoading(true);
 
-      const response = await axios.post('/api/stores', values);
+      const response = await axios.post("/api/stores", values);
       //toast like try and catsh for error and success
-      console.log(response.data);
       toast.success("Store created.");
     } catch (error) {
       //sucess fetch data loading is false
