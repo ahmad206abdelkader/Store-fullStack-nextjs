@@ -1,6 +1,7 @@
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
+import Navbar from "@/components/navbar";
 
 export default async function DahsboardLayout({
   children,
@@ -9,27 +10,27 @@ export default async function DahsboardLayout({
   children: React.ReactNode;
   params: { storeId: string };
 }) {
-    const {userId} = auth();
+  const { userId } = auth();
 
-    if(!userId){
-        redirect('/sign-in')
-    }
+  if (!userId) {
+    redirect("/sign-in");
+  }
 
-    const store= await prismadb.store.findFirst({
-        where: {
-            id: params.storeId,
-            userId
-        }
-    });
+  const store = await prismadb.store.findFirst({
+    where: {
+      id: params.storeId,
+      userId,
+    },
+  });
 
-    if(!store){
-        redirect('/');
-    }
+  if (!store) {
+    redirect("/");
+  }
 
-    return (
-        <>
-         <div>This will a Navbar</div>
-         {children}
-        </>
-    )
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
 }
