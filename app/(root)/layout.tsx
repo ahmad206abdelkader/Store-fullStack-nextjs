@@ -18,6 +18,7 @@ export default async function SetupLauyout({
             userId
         }
     });
+    
     if(store){
         redirect(`/${store.id}`)
     }
