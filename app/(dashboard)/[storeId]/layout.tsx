@@ -14,8 +14,7 @@ export default async function DahsboardLayout({
 
   if (!userId) {
     redirect("/sign-in");
-  }
-
+  };
   const store = await prismadb.store.findFirst({
     where: {
       id: params.storeId,
@@ -28,9 +27,10 @@ export default async function DahsboardLayout({
   }
 
   return (
+  
     <>
       <Navbar />
-      {children}
+      {children} 
     </>
   );
 }
