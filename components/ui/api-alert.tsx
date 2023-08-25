@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import { Copy, Server } from "lucide-react";
 import { toast } from "react-hot-toast";
