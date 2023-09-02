@@ -15,15 +15,15 @@ export async function POST(
     const { name, billboardId } = body;
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 401 });
+      return new NextResponse("Unauthenticated", { status: 403 });
     }
 
     if (!name) {
       return new NextResponse("Name is required", { status: 400 });
     }
-
+    
     if (!billboardId) {
-      return new NextResponse("Billboard id is required", { status: 400 });
+      return new NextResponse("Billboard ID is required", { status: 400 });
     }
 
     if (!params.storeId) {
@@ -51,7 +51,7 @@ export async function POST(
   
     return NextResponse.json(category);
   } catch (error) {
-    console.log('[CATEGORYS_POST]', error);
+    console.log('[CATEGORIES_POST]', error);
     return new NextResponse("Internal error", { status: 500 });
   }
 };
@@ -65,7 +65,7 @@ export async function GET(
       return new NextResponse("Store id is required", { status: 400 });
     }
 
-    const categories = await prismadb.billboard.findMany({
+    const categories = await prismadb.category.findMany({
       where: {
         storeId: params.storeId
       }
