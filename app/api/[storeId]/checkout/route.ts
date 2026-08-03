@@ -1,35 +1,61 @@
-import Stripe from "stripe";
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { stripe } from "@/lib/stripe";
-import prismadb from "@/lib/prismadb";
 import { getServerSession } from "@/lib/auth-session";
-import { getOrCreateStripeCustomer } from "@/lib/stripe-customer";
+import prismadb from "@/lib/prismadb";
+
+const frontendStoreOrigin = new URL(
+  process.env.FRONTEND_STORE_URL || "http://localhost:3001"
+).origin;
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": process.env.FRONTEND_STORE_URL || "http://localhost:3001",
+  "Access-Control-Allow-Origin": frontendStoreOrigin,
   "Access-Control-Allow-Credentials": "true",
-  "Vary": "Origin",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
 };
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+class CheckoutConflictError extends Error {}
+
+function hasTrustedOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === frontendStoreOrigin;
+}
+
+export async function OPTIONS(request: Request) {
+  if (!hasTrustedOrigin(request)) {
+    return new NextResponse(null, { status: 403 });
+  }
+
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
 
 export async function POST(
-  req: Request,
+  request: Request,
   { params }: { params: { storeId: string } }
 ) {
-  const authSession = await getServerSession(req.headers);
-
-  if (!authSession) {
-    return new NextResponse("Unauthorized", { status: 401, headers: corsHeaders });
+  if (!hasTrustedOrigin(request)) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const body = await req.json().catch(() => null);
+  const authSession = await getServerSession(request.headers);
+
+  if (!authSession) {
+    return new NextResponse("Unauthorized", {
+      status: 401,
+      headers: corsHeaders,
+    });
+  }
+
+  const body = await request.json().catch(() => null);
   const productIds = body?.productIds;
+  const address = typeof body?.address === "string" ? body.address.trim() : "";
+  const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
 
   if (
     !Array.isArray(productIds) ||
@@ -43,46 +69,27 @@ export async function POST(
     });
   }
 
-  const uniqueProductIds = Array.from(new Set<string>(productIds));
-
-  const products = await prismadb.product.findMany({
-    where: {
-      id: { in: uniqueProductIds },
-      storeId: params.storeId,
-      isArchived: false,
-    }
-  });
-
-  if (products.length !== uniqueProductIds.length) {
-    return new NextResponse("One or more products are unavailable", {
+  if (address.length < 5 || address.length > 500) {
+    return new NextResponse("A valid delivery address is required", {
       status: 400,
       headers: corsHeaders,
     });
   }
 
-  const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-
-  products.forEach((product) => {
-    const unitAmount = Math.round(product.price.toNumber() * 100);
-
-    if (!Number.isSafeInteger(unitAmount) || unitAmount <= 0) {
-      throw new Error(`Product ${product.id} has an invalid price`);
-    }
-
-    line_items.push({
-      quantity: 1,
-      price_data: {
-        currency: 'USD',
-        product_data: {
-          name: product.name,
-        },
-        unit_amount: unitAmount,
-      }
+  if (
+    phone.length < 7 ||
+    phone.length > 32 ||
+    !/^[+\d][\d\s().-]+$/.test(phone)
+  ) {
+    return new NextResponse("A valid phone number is required", {
+      status: 400,
+      headers: corsHeaders,
     });
-  });
+  }
 
   const user = await prismadb.user.findUnique({
     where: { id: authSession.user.id },
+    select: { id: true },
   });
 
   if (!user) {
@@ -92,55 +99,81 @@ export async function POST(
     });
   }
 
-  const customer = await getOrCreateStripeCustomer(user);
+  const uniqueProductIds = Array.from(new Set<string>(productIds));
 
-  const order = await prismadb.order.create({
-    data: {
-      storeId: params.storeId,
-      userId: user.id,
-      stripeCustomerId: customer.id,
-      isPaid: false,
-      orderItems: {
-        create: products.map((product) => ({
-          product: {
-            connect: {
-              id: product.id,
-            }
-          }
-        }))
+  try {
+    const order = await prismadb.$transaction(async (transaction) => {
+      const products = await transaction.product.findMany({
+        where: {
+          id: { in: uniqueProductIds },
+          storeId: params.storeId,
+          isArchived: false,
+        },
+        select: {
+          id: true,
+          price: true,
+        },
+      });
+
+      if (
+        products.length !== uniqueProductIds.length ||
+        products.some((product) => product.price.lte(0))
+      ) {
+        throw new CheckoutConflictError(
+          "One or more products are unavailable or have an invalid price"
+        );
       }
+
+      const reservation = await transaction.product.updateMany({
+        where: {
+          id: { in: uniqueProductIds },
+          storeId: params.storeId,
+          isArchived: false,
+        },
+        data: { isArchived: true },
+      });
+
+      if (reservation.count !== uniqueProductIds.length) {
+        throw new CheckoutConflictError(
+          "One or more products became unavailable"
+        );
+      }
+
+      return transaction.order.create({
+        data: {
+          storeId: params.storeId,
+          userId: user.id,
+          address,
+          phone,
+          isPaid: false,
+          paymentMethod: PaymentMethod.CASH_ON_DELIVERY,
+          paymentStatus: PaymentStatus.PENDING,
+          orderStatus: OrderStatus.PENDING,
+          orderItems: {
+            create: products.map((product) => ({
+              unitPrice: product.price,
+              product: {
+                connect: { id: product.id },
+              },
+            })),
+          },
+        },
+        select: { id: true },
+      });
+    });
+
+    return NextResponse.json(
+      { orderId: order.id },
+      { status: 201, headers: corsHeaders }
+    );
+  } catch (error) {
+    if (error instanceof CheckoutConflictError) {
+      return new NextResponse(error.message, {
+        status: 409,
+        headers: corsHeaders,
+      });
     }
-  });
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customer.id,
-    client_reference_id: user.id,
-    line_items,
-    mode: 'payment',
-    billing_address_collection: 'required',
-    phone_number_collection: {
-      enabled: true,
-    },
-    success_url: `${process.env.FRONTEND_STORE_URL}/cart?success=1`,
-    cancel_url: `${process.env.FRONTEND_STORE_URL}/cart?canceled=1`,
-    metadata: {
-      orderId: order.id,
-      userId: user.id,
-    },
-    payment_intent_data: {
-      metadata: {
-        orderId: order.id,
-        userId: user.id,
-      },
-    },
-  });
-
-  await prismadb.order.update({
-    where: { id: order.id },
-    data: { stripeCheckoutSessionId: session.id },
-  });
-
-  return NextResponse.json({ url: session.url }, {
-    headers: corsHeaders
-  });
-};
+    throw error;
+  }
+}

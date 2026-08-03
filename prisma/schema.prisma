@@ -178,20 +178,23 @@ model Image {
 }
 
 model Order {
-  id                      String      @id @default(uuid())
+  id                      String         @id @default(uuid())
   storeId                 String
-  store                   Store       @relation("StoreToOrder", fields: [storeId], references: [id])
+  store                   Store          @relation("StoreToOrder", fields: [storeId], references: [id])
   userId                  String?
-  user                    User?       @relation(fields: [userId], references: [id])
+  user                    User?          @relation(fields: [userId], references: [id])
   stripeCustomerId        String?
-  stripeCheckoutSessionId String?     @unique
+  stripeCheckoutSessionId String?        @unique
   stripePaymentIntentId   String?
+  paymentMethod           PaymentMethod?
+  paymentStatus           PaymentStatus  @default(PENDING)
+  orderStatus             OrderStatus    @default(PENDING)
   orderItems              OrderItem[]
-  isPaid                  Boolean     @default(false)
-  phone                   String      @default("")
-  address                 String      @default("")
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  isPaid                  Boolean        @default(false)
+  phone                   String         @default("")
+  address                 String         @default("")
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
   @@index([storeId])
   @@index([userId])
@@ -199,12 +202,32 @@ model Order {
 }
 
 model OrderItem {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   orderId   String
-  relation  Order   @relation(fields: [orderId], references: [id])
+  relation  Order    @relation(fields: [orderId], references: [id])
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+  unitPrice Decimal?
 
   @@index([productId])
   @@index([orderId])
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  FULFILLED
+  CANCELLED
 }
