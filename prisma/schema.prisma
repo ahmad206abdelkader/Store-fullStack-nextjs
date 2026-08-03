@@ -15,14 +15,76 @@ model Store {
   id          String      @id @default(uuid())
   name        String
   userId      String
+  user        User        @relation(fields: [userId], references: [id])
   billboiards Billboard[] @relation("StoreToBillboard")
   categories  Category[]  @relation("StoreToCategory")
   sizes       Size[]      @relation("StoreToSize")
   color       Color[]     @relation("StoreToColor")
   product     Product[]   @relation("StoreToProduct")
-  orders      Order[] @relation("StoreToOrder")
+  orders      Order[]     @relation("StoreToOrder")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model User {
+  id               String    @id
+  name             String
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  image            String?
+  stripeCustomerId String?   @unique
+  sessions         Session[]
+  accounts         Account[]
+  stores           Store[]
+  orders           Order[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Billboard {
@@ -54,50 +116,49 @@ model Category {
 }
 
 model Size {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   storeId   String
-  store     Store    @relation("StoreToSize", fields: [storeId], references: [id])
+  store     Store     @relation("StoreToSize", fields: [storeId], references: [id])
   name      String
   value     String
-  products Product[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([storeId])
 }
 
 model Color {
-  id          String   @id @default(uuid())
-  storeId     String   // Foreign Key to Store
-  store       Store    @relation("StoreToColor", fields: [storeId], references: [id])
-  name        String
-  value       String
-  products Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(uuid())
+  storeId   String // Foreign Key to Store
+  store     Store     @relation("StoreToColor", fields: [storeId], references: [id])
+  name      String
+  value     String
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([storeId])
 }
 
-model Product{
-  id String @id @default(uuid())
-  storeId String 
-  store Store @relation("StoreToProduct", fields:[storeId],references: [id])
+model Product {
+  id         String      @id @default(uuid())
+  storeId    String
+  store      Store       @relation("StoreToProduct", fields: [storeId], references: [id])
   categoryId String
-  category Category @relation("CategoryToProduct",fields: [categoryId],references: [id])
-  name String
-  price Decimal
-  isFeatured Boolean @default(false)
-  isArchived Boolean @default(false)
-  sizeId String
-  size Size @relation(fields: [sizeId], references: [id])
-  colorId String
-  color Color @relation(fields: [colorId],references: [id])
-  images Image[]
+  category   Category    @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  name       String
+  price      Decimal
+  isFeatured Boolean     @default(false)
+  isArchived Boolean     @default(false)
+  sizeId     String
+  size       Size        @relation(fields: [sizeId], references: [id])
+  colorId    String
+  color      Color       @relation(fields: [colorId], references: [id])
+  images     Image[]
   orderItems OrderItem[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@index([colorId])
   @@index([sizeId])
@@ -105,37 +166,44 @@ model Product{
   @@index([storeId])
 }
 
-model Image{
-  id String @id @default(uuid())
+model Image {
+  id        String   @id @default(uuid())
   productId String
-  product Product @relation(fields: [productId],references: [id], onDelete: Cascade)
-  url String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId])
 }
 
-model Order{
-  id String @id @default(uuid())
-  storeId String 
-  store Store @relation("StoreToOrder", fields: [storeId], references: [id])
-  orderItems OrderItem[]
-  isPaid Boolean @default(false)
-  phone String @default("")
-  address String @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Order {
+  id                      String      @id @default(uuid())
+  storeId                 String
+  store                   Store       @relation("StoreToOrder", fields: [storeId], references: [id])
+  userId                  String?
+  user                    User?       @relation(fields: [userId], references: [id])
+  stripeCustomerId        String?
+  stripeCheckoutSessionId String?     @unique
+  stripePaymentIntentId   String?
+  orderItems              OrderItem[]
+  isPaid                  Boolean     @default(false)
+  phone                   String      @default("")
+  address                 String      @default("")
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
 
   @@index([storeId])
+  @@index([userId])
+  @@index([stripeCustomerId])
 }
 
-model OrderItem{
-  id String @id @default(uuid())
-  orderId String
-  relation Order @relation(fields:[orderId],references: [id])
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  relation  Order   @relation(fields: [orderId], references: [id])
   productId String
-  product Product @relation(fields: [productId],references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 
   @@index([productId])
   @@index([orderId])

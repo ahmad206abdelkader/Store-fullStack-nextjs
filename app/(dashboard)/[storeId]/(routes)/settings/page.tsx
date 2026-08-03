@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getCurrentUserId } from "@/lib/auth-session";
 import { redirect } from "next/navigation";
 import { SettingsForm } from "./components/setting-form";
 
@@ -12,7 +12,7 @@ interface SettingsPageProps {
 
 //this error becuase i have async await with '({ params }: SettingsPageProps) => Promise<Element>'
 const SettingsPage: React.FC<SettingsPageProps> = async ({ params }) => {
-  const { userId } = auth();
+  const userId = await getCurrentUserId();
 
   if (!userId) {
     redirect("/sign-in");

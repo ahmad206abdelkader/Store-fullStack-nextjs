@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { getCurrentUserId } from "@/lib/auth-session";
 
 import prismadb from "@/lib/prismadb";
 
@@ -36,10 +36,10 @@ export async function DELETE(
   { params }: { params: { productId: string, storeId: string } }
 ) {
   try {
-    const { userId } = auth();
+    const userId = await getCurrentUserId();
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 403 });
+      return new NextResponse("Unauthenticated", { status: 401 });
     }
 
     if (!params.productId) {
@@ -54,7 +54,7 @@ export async function DELETE(
     });
 
     if (!storeByUserId) {
-      return new NextResponse("Unauthorized", { status: 405 });
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     const product = await prismadb.product.delete({
@@ -76,14 +76,14 @@ export async function PATCH(
   { params }: { params: { productId: string, storeId: string } }
 ) {
   try {
-    const { userId } = auth();
+    const userId = await getCurrentUserId();
 
     const body = await req.json();
 
     const { name, price, categoryId, images, colorId, sizeId, isFeatured, isArchived } = body;
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 403 });
+      return new NextResponse("Unauthenticated", { status: 401 });
     }
 
     if (!params.productId) {
@@ -122,7 +122,7 @@ export async function PATCH(
     });
 
     if (!storeByUserId) {
-      return new NextResponse("Unauthorized", { status: 405 });
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     await prismadb.product.update({

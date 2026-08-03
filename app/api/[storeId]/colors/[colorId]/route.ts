@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { getCurrentUserId } from "@/lib/auth-session";
 
 import prismadb from "@/lib/prismadb";
 
@@ -30,10 +30,10 @@ export async function DELETE(
   { params }: { params: { colorId: string, storeId: string } }
 ) {
   try {
-    const { userId } = auth();
+    const userId = await getCurrentUserId();
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 403 });
+      return new NextResponse("Unauthenticated", { status: 401 });
     }
 
     if (!params.colorId) {
@@ -48,7 +48,7 @@ export async function DELETE(
     });
 
     if (!storeByUserId) {
-      return new NextResponse("Unauthorized", { status: 405 });
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     const color = await prismadb.color.delete({
@@ -70,14 +70,14 @@ export async function PATCH(
   { params }: { params: { colorId: string, storeId: string } }
 ) {
   try {
-    const { userId } = auth();
+    const userId = await getCurrentUserId();
 
     const body = await req.json();
 
     const { name, value } = body;
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 403 });
+      return new NextResponse("Unauthenticated", { status: 401 });
     }
 
     if (!name) {
@@ -101,7 +101,7 @@ export async function PATCH(
     });
 
     if (!storeByUserId) {
-      return new NextResponse("Unauthorized", { status: 405 });
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     const color = await prismadb.color.update({

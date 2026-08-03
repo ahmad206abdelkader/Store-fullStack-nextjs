@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getCurrentUserId } from "@/lib/auth-session";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -7,7 +7,7 @@ export async function POST(
 
 ){
     try{
-      const {userId}= auth();
+      const userId = await getCurrentUserId();
       const body = await req.json();
 
       const {name}  = body;
